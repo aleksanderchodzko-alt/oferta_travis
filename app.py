@@ -10,15 +10,26 @@ from reportlab.lib.utils import ImageReader
 from io import BytesIO
 import requests
 
-# --- KONFIGURACJA CZCIONKI ---
+# --- 1. POBIERANIE LOGO DO PAMIĘCI (STABILNA METODA) ---
+@st.cache_data
+def get_logo_data():
+    url = "https://travis.pl/wp-content/uploads/2025/07/logo_travis500.png"
+    try:
+        resp = requests.get(url, timeout=10)
+        return BytesIO(resp.content)
+    except:
+        return None
+
+# --- 2. KONFIGURACJA CZCIONKI ---
 @st.cache_data
 def setup_fonts():
     try:
         url = "https://github.com/google/fonts/raw/main/ofl/opensans/OpenSans%5Bwdth%2Cwght%5D.ttf"
-        res = requests.get(url)
+        res = requests.get(url, timeout=10)
         pdfmetrics.registerFont(TTFont('Standard', BytesIO(res.content)))
         return 'Standard'
-    except: return 'Helvetica'
+    except:
+        return 'Helvetica'
 
 FONT_NAME = setup_fonts()
 NAVY = colors.HexColor("#002d5a")
@@ -38,15 +49,16 @@ def shadow_image(img_file, w, h):
             ('RIGHTPADDING', (0,0), (-1,-1), 4),
         ]))
         return t
-    except: return Paragraph("[Błąd obrazu]", getSampleStyleSheet()['Normal'])
+    except:
+        return Paragraph("[Błąd obrazu]", getSampleStyleSheet()['Normal'])
 
-# --- SZABLON STRONY ---
+# --- SZABLON STRONY (NAGŁÓWEK I STOPKA) ---
 def my_page_layout(canvas, doc):
     canvas.saveState()
     canvas.setFillColor(BG_LIGHT)
     canvas.rect(0, 0, A4[0], A4[1], fill=1, stroke=0)
     
-    # Góra
+    # Góra (Falka)
     canvas.setFillColor(NAVY)
     p = canvas.beginPath()
     p.moveTo(0, A4[1])
@@ -56,13 +68,17 @@ def my_page_layout(canvas, doc):
     p.close()
     canvas.drawPath(p, fill=1, stroke=0)
 
-    # LOGO (Stabilna metoda)
-    try:
-        logo_url = "https://travis.pl/wp-content/uploads/2025/07/logo_travis500.png"
-        canvas.drawImage(logo_url, (A4[0]-7.5*cm)/2, A4[1]-3.2*cm, width=7.5*cm, preserveAspectRatio=True, mask='auto')
-    except: pass
+    # LOGO (Metoda z użyciem ImageReader z pamięci)
+    logo_data = get_logo_data()
+    if logo_data:
+        try:
+            logo_data.seek(0) # Reset pozycji w buforze
+            img_reader = ImageReader(logo_data)
+            canvas.drawImage(img_reader, (A4[0]-7.5*cm)/2, A4[1]-3.2*cm, width=7.5*cm, preserveAspectRatio=True, mask='auto')
+        except:
+            pass
 
-    # Dół
+    # Dół (Falka)
     canvas.setFillColor(NAVY)
     p_bot = canvas.beginPath()
     p_bot.moveTo(0, 0); p_bot.lineTo(A4[0], 0); p_bot.lineTo(A4[0], 2.2*cm)
@@ -72,8 +88,8 @@ def my_page_layout(canvas, doc):
     # STOPKA
     canvas.setFillColor(colors.white)
     canvas.setFont(FONT_NAME, 7)
-    tel = st.session_state.get('tel', '')
-    mail = st.session_state.get('mail', '')
+    tel = st.session_state.get('tel', '789 563 405')
+    mail = st.session_state.get('mail', 'biuro@travis.pl')
     canvas.drawCentredString(A4[0]/2, 1.2*cm, f"Biuro Podróży TRAVIS | tel: {tel} | e-mail: {mail}")
     canvas.drawCentredString(A4[0]/2, 0.8*cm, "Wpis do Rejestru Organizatorów i Pośredników Turystycznych nr 41059")
     canvas.restoreState()
@@ -95,7 +111,6 @@ def generate_pdf(tytul, termin, plan, koszt, zawiera, nie_zawiera, foto_main, ga
         story.append(shadow_image(foto_main, 17.5*cm, 8*cm))
         story.append(Spacer(1, 25))
 
-    # POPRAWIONA FUNKCJA KARTY (bez błędnego PADDING)
     def card(content, w):
         t = Table([[content]], colWidths=[w])
         t.setStyle(TableStyle([
@@ -138,23 +153,10 @@ def generate_pdf(tytul, termin, plan, koszt, zawiera, nie_zawiera, foto_main, ga
     doc.build(story)
     return buffer.getvalue()
 
-# --- UI ---
+# --- INTERFEJS STREAMLIT ---
 st.title("🏝️ Travis Designer Premium")
+
 with st.sidebar:
+    st.header("Kontakt w stopce")
     st.session_state['tel'] = st.text_input("Numer telefonu", "789 563 405")
-    st.session_state['mail'] = st.text_input("Adres e-mail", "biuro@travis.pl")
-    f_main = st.file_uploader("Zdjęcie główne", type=['jpg','png'])
-    f_gal = st.file_uploader("Galeria", type=['jpg','png'], accept_multiple_files=True)
-
-u_t = st.text_input("Tytuł")
-u_d = st.text_input("Termin")
-u_p = st.text_area("Program")
-c1, c2, c3 = st.columns(3)
-with c1: u_k = st.text_area("Koszt")
-with c2: u_z = st.text_area("Cena zawiera")
-with c3: u_nz = st.text_area("Cena nie zawiera")
-
-if st.button("🚀 GENERUJ PDF"):
-    if u_t:
-        pdf_final = generate_pdf(u_t, u_d, u_p, u_k, u_z, u_nz, f_main, f_gal)
-        st.download_button("📥 POBIERZ", data=pdf_final, file_name=f"Oferta_Travis_{u_t}.pdf")
+    st.session_state['mail'] = st.text_
