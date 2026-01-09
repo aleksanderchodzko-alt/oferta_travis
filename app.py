@@ -1,107 +1,101 @@
 import streamlit as st
+from fpdf import FPDF
+import base64
 
-# Konfiguracja strony - stylistyka Travis (Granat: #002d5a)
-st.set_page_config(page_title="Kreator Ofert TRAVIS", page_icon="✈️", layout="wide")
+# Konfiguracja strony
+st.set_page_config(page_title="Generator TRAVIS", page_icon="✈️")
 
-# CSS dla zachowania kolorystyki logo i stałej stopki
-st.markdown("""
-    <style>
-    .main { background-color: #ffffff; }
-    h1, h2, h3 { color: #002d5a; font-family: 'Arial'; border-left: 5px solid #002d5a; padding-left: 15px; }
-    .stButton>button { 
-        background-color: #002d5a; color: white; border-radius: 0px; border: none; font-weight: bold; width: 100%;
-    }
-    .footer {
-        position: fixed;
-        left: 0;
-        bottom: 0;
-        width: 100%;
-        background-color: white;
-        color: #002d5a;
-        text-align: center;
-        padding: 10px;
-        border-top: 1px solid #002d5a;
-        font-size: 12px;
-        z-index: 999;
-    }
-    @media print {
-        .no-print { display: none !important; }
-        .footer { position: fixed; bottom: 0; }
-    }
-    </style>
-    """, unsafe_allow_html=True)
+# --- KLASA GENERUJĄCA PDF ---
+class TravisPDF(FPDF):
+    def header(self):
+        # Logo Travis na każdej stronie
+        self.image("https://travis.pl/wp-content/uploads/2025/07/logo_travis500.png", 10, 8, 40)
+        self.set_font('Arial', 'B', 15)
+        self.set_text_color(0, 45, 90) # Granat Travis
+        self.cell(80)
+        self.cell(30, 10, 'OFERTA BIURA PODROZY TRAVIS', 0, 0, 'C')
+        self.ln(20)
 
-# Nagłówek z logo
-LOGO_URL = "https://travis.pl/wp-content/uploads/2025/07/logo_travis500.png"
-st.image(LOGO_URL, width=220)
+    def footer(self):
+        # Stała stopka na każdej stronie
+        self.set_y(-25)
+        self.set_font('Arial', 'I', 8)
+        self.set_text_color(0, 45, 90)
+        self.cell(0, 5, f'Biuro Podrozy TRAVIS | tel: {st.session_state.tel} | e-mail: {st.session_state.mail}', 0, 1, 'C')
+        self.set_font('Arial', 'B', 8)
+        self.cell(0, 5, 'wpis do Rejestru Organizatorów i Posredników Turystycznych pod numerem 41059', 0, 0, 'C')
 
-st.title("PROFESJONALNY KREATOR OFERT")
+# --- INTERFEJS ---
+st.title("🚀 Generator PDF Travis")
 
-# --- PANEL BOCZNY (SIDEBAR) ---
 with st.sidebar:
-    st.header("🖼️ Multimedia i Kontakt")
-    foto_glowne = st.file_uploader("Wgraj zdjęcie główne", type=['jpg', 'png'], key="main_foto")
-    galeria = st.file_uploader("Dodatkowa galeria zdjęć (wiele plików)", type=['jpg', 'png'], accept_multiple_files=True)
-    
+    st.header("⚙️ Ustawienia")
+    st.session_state.tel = st.text_input("Telefon", value="789 563 405")
+    st.session_state.mail = st.text_input("E-mail", value="biuro@travis.pl")
     st.markdown("---")
-    u_tel = st.text_input("Telefon biura", value="789 563 405")
-    u_mail = st.text_input("E-mail biura", value="biuro@travis.pl")
+    foto_glowne = st.file_uploader("Wgraj zdjęcie główne (do PDF)", type=['jpg', 'png'])
 
-# --- FORMULARZ GŁÓWNY ---
-col1, col2 = st.columns([2, 1])
-
+col1, col2 = st.columns(2)
 with col1:
-    tytul = st.text_input("Kierunek / Tytuł oferty", placeholder="np. MALTA 4 DNI - City Break")
-    termin = st.text_input("Termin wycieczki", placeholder="np. 27 czerwca - 1 lipca 2026")
-    plan = st.text_area("Plan wycieczki (Dzień po dniu)", height=300, placeholder="DZIEŃ 1: ...\nDZIEŃ 2: ...")
-
+    tytul = st.text_input("Nazwa wycieczki", "MALTA 4 DNI")
+    termin = st.text_input("Termin", "27.06 - 01.07.2026")
 with col2:
-    st.write("**💰 Konfiguracje cenowe**")
-    c1 = st.text_input("Grupa 1 (np. 46-50 os.)", placeholder="3 395,00 zł")
-    c2 = st.text_input("Grupa 2 (np. 40-45 os.)", placeholder="3 470,00 zł")
-    c3 = st.text_input("Grupa 3 (np. 35-39 os.)", placeholder="3 545,00 zł")
+    ceny = st.text_area("Wyceny (każda w nowej linii)", "46-50 os. | 3 395 zł\n40-45 os. | 3 470 zł")
 
-st.markdown("---")
+plan = st.text_area("Plan wycieczki", height=200)
+zawiera = st.text_area("Cena zawiera", height=100)
+nie_zawiera = st.text_area("Cena nie zawiera", height=100)
 
-col_a, col_b = st.columns(2)
-with col_a:
-    zawiera = st.text_area("✅ Cena zawiera:", height=200, placeholder="- Transfery\n- Noclegi\n- Wyżywienie...")
-with col_b:
-    nie_zawiera = st.text_area("❌ Cena nie zawiera:", height=200, placeholder="- Bilety wstępu (ok. 130 EUR)\n- Wydatki własne...")
+# --- LOGIKA GENEROWANIA ---
+if st.button("🔥 GENERUJ GOTOWY PLIK PDF"):
+    pdf = TravisPDF()
+    pdf.add_page()
+    pdf.set_auto_page_break(auto=True, margin=30)
+    
+    # Nagłówek i Tytuł
+    pdf.set_font('Arial', 'B', 16)
+    pdf.cell(0, 10, tytul.encode('latin-1', 'ignore').decode('latin-1'), ln=True)
+    pdf.set_font('Arial', '', 12)
+    pdf.cell(0, 10, f"Termin: {termin}".encode('latin-1', 'ignore').decode('latin-1'), ln=True)
+    pdf.ln(5)
 
-# --- SEKCJA PODGLĄDU ---
-st.markdown("### 👁️ Podgląd dokumentu")
+    # Zdjęcie (jeśli wgrane)
+    if foto_glowne:
+        with open("temp_img.png", "wb") as f:
+            f.write(foto_glowne.getbuffer())
+        pdf.image("temp_img.png", x=10, w=180)
+        pdf.ln(5)
 
-if foto_glowne:
-    st.image(foto_glowne, use_container_width=True)
+    # Program
+    pdf.set_font('Arial', 'B', 12)
+    pdf.cell(0, 10, "PROGRAM:", ln=True)
+    pdf.set_font('Arial', '', 10)
+    pdf.multi_cell(0, 7, plan.encode('latin-1', 'ignore').decode('latin-1'))
+    pdf.ln(5)
 
-st.header(tytul)
-st.subheader(f"📅 {termin}")
+    # Ceny
+    pdf.set_font('Arial', 'B', 12)
+    pdf.cell(0, 10, "CENNIK:", ln=True)
+    pdf.set_font('Arial', '', 10)
+    pdf.multi_cell(0, 7, ceny.encode('latin-1', 'ignore').decode('latin-1'))
+    pdf.ln(5)
 
-st.write("**PROGRAM PODRÓŻY:**")
-st.write(plan)
+    # Świadczenia
+    pdf.set_font('Arial', 'B', 11)
+    pdf.set_text_color(0, 100, 0) # Zielony dla "Zawiera"
+    pdf.cell(0, 10, "CENA ZAWIERA:", ln=True)
+    pdf.set_font('Arial', '', 10)
+    pdf.multi_cell(0, 6, zawiera.encode('latin-1', 'ignore').decode('latin-1'))
+    
+    pdf.ln(5)
+    pdf.set_font('Arial', 'B', 11)
+    pdf.set_text_color(150, 0, 0) # Czerwony dla "Nie zawiera"
+    pdf.cell(0, 10, "CENA NIE ZAWIERA:", ln=True)
+    pdf.set_font('Arial', '', 10)
+    pdf.multi_cell(0, 6, nie_zawiera.encode('latin-1', 'ignore').decode('latin-1'))
 
-# Tabela cenowa
-st.table({
-    "Wielkość grupy": ["Największa", "Średnia", "Najmniejsza"],
-    "Cena za osobę": [c1, c2, c3]
-})
-
-# Galeria zdjęć na dole
-if galeria:
-    st.markdown("### 📸 Galeria zdjęć")
-    cols = st.columns(3)
-    for idx, img in enumerate(galeria):
-        cols[idx % 3].image(img, use_container_width=True)
-
-# --- ZASZYTA STOPKA ---
-st.markdown(f"""
-    <div class="footer">
-        <p>Biuro Podróży TRAVIS | tel: {u_tel} | e-mail: {u_mail}<br>
-        <b>wpis do Rejestru Organizatorów i Pośredników Turystycznych pod numerem 41059</b></p>
-    </div>
-    """, unsafe_allow_html=True)
-
-# Przycisk pomocniczy
-if st.button("🖨️ PRZYGOTUJ DO WYDRUKU PDF"):
-    st.info("💡 Instrukcja: Naciśnij Ctrl+P. W oknie drukowania wybierz 'Zapisz jako PDF'.")
+    # Konwersja do pobrania
+    pdf_output = pdf.output(dest='S').encode('latin-1', 'ignore')
+    b64 = base64.b64encode(pdf_output).decode()
+    href = f'<a href="data:application/octet-stream;base64,{b64}" download="Oferta_Travis_{tytul}.pdf" style="text-decoration: none; padding: 10px 20px; background-color: #002d5a; color: white; border-radius: 5px;">📥 KLIKNIJ TUTAJ ABY POBRAĆ PDF</a>'
+    st.markdown(href, unsafe_allow_html=True)
