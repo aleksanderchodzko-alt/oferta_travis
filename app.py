@@ -1,173 +1,143 @@
 import streamlit as st
 from reportlab.lib.pagesizes import A4
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, Table, TableStyle
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.units import inch
 from reportlab.lib import colors
+from reportlab.lib.units import cm
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, Table, TableStyle, Frame, PageTemplate
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.pdfgen import canvas
 from io import BytesIO
-from PIL import Image as PILImage # do obróbki zdjęć
 
-# Konfiguracja strony Streamlit
-st.set_page_config(page_title="TRAVIS Kreator PDF", page_icon="✈️", layout="wide")
+# --- USTAWIENIA KOLORYSTYCZNE TRAVIS ---
+COLOR_NAVY = colors.HexColor("#002d5a")
+COLOR_BG = colors.HexColor("#f4f4f4")  # Lekko szare tło
+COLOR_WHITE = colors.white
 
-# --- STYLE GRAFICZNE TRAVIS ---
-# Główne kolory Travis: Granat (#002d5a), Jasnoszary (#f0f2f6)
-TRAVIS_BLUE = colors.HexColor("#002d5a")
-TRAVIS_LIGHT_GREY = colors.HexColor("#f0f2f6")
-
-# Globalne style
-styles = getSampleStyleSheet()
-styles.add(ParagraphStyle(name='TravisTitle', fontName='Helvetica-Bold', fontSize=24, leading=28, alignment=1, textColor=TRAVIS_BLUE))
-styles.add(ParagraphStyle(name='TravisSubtitle', fontName='Helvetica', fontSize=14, leading=16, alignment=1, textColor=TRAVIS_BLUE))
-styles.add(ParagraphStyle(name='TravisHeader', fontName='Helvetica-Bold', fontSize=16, leading=18, textColor=TRAVIS_BLUE, spaceAfter=8))
-styles.add(ParagraphStyle(name='TravisNormal', fontName='Helvetica', fontSize=12, leading=14, textColor=colors.black, spaceAfter=4))
-styles.add(ParagraphStyle(name='TravisIncludes', fontName='Helvetica', fontSize=12, leading=14, textColor=colors.HexColor("#28a745"), spaceAfter=4)) # Zielony
-styles.add(ParagraphStyle(name='TravisExcludes', fontName='Helvetica', fontSize=12, leading=14, textColor=colors.HexColor("#dc3545"), spaceAfter=4)) # Czerwony
-styles.add(ParagraphStyle(name='TravisFooter', fontName='Helvetica', fontSize=9, leading=11, alignment=1, textColor=TRAVIS_BLUE))
+# --- FUNKCJA TŁA I STOPKI (ZASZYTA) ---
+def draw_fixed_elements(canvas, doc):
+    canvas.saveState()
+    # 1. Rysowanie tła na całą stronę
+    canvas.setFillColor(COLOR_BG)
+    canvas.rect(0, 0, A4[0], A4[1], fill=1, stroke=0)
+    
+    # 2. Ozdobnik graficzny (pasek boczny lub górny)
+    canvas.setFillColor(COLOR_NAVY)
+    canvas.rect(0, A4[1]-0.5*cm, A4[0], 0.5*cm, fill=1, stroke=0) # Pasek na samej górze
+    
+    # 3. Stopka (Poprawiona i sformatowana)
+    footer_y = 1.5 * cm
+    canvas.setFont("Helvetica-Bold", 8)
+    canvas.setFillColor(COLOR_NAVY)
+    canvas.drawCentredString(A4[0]/2, footer_y + 15, f"Biuro Podróży TRAVIS | tel: {st.session_state.get('tel', '')} | e-mail: {st.session_state.get('mail', '')}")
+    canvas.setFont("Helvetica", 7)
+    canvas.drawCentredString(A4[0]/2, footer_y + 5, "wpis do Rejestru Organizatorów i Pośredników Turystycznych pod numerem 41059")
+    
+    # Linia nad stopką
+    canvas.setStrokeColor(COLOR_NAVY)
+    canvas.setLineWidth(0.5)
+    canvas.line(2*cm, footer_y + 25, A4[0]-2*cm, footer_y + 25)
+    canvas.restoreState()
 
 # --- GENERATOR PDF ---
-def generate_travis_pdf(tytul, termin, plan, ceny_raw, zawiera, nie_zawiera, foto_buffer, tel, email):
+def generate_pdf(tytul, termin, plan, cennik_data, zawiera, nie_zawiera, foto):
     buffer = BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=72, leftMargin=72, topMargin=72, bottomMargin=72)
+    doc = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=1.5*cm, rightMargin=1.5*cm, topMargin=2*cm, bottomMargin=3*cm)
+    
+    styles = getSampleStyleSheet()
+    style_title = ParagraphStyle('T', fontName='Helvetica-Bold', fontSize=22, textColor=COLOR_NAVY, spaceAfter=10, alignment=1)
+    style_h = ParagraphStyle('H', fontName='Helvetica-Bold', fontSize=14, textColor=COLOR_NAVY, spaceBefore=15, spaceAfter=8)
+    style_p = ParagraphStyle('P', fontName='Helvetica', fontSize=10, leading=14, textColor=colors.black)
+    style_inc = ParagraphStyle('Inc', fontName='Helvetica', fontSize=9, leading=12, textColor=colors.HexColor("#1e5631"))
+    style_exc = ParagraphStyle('Exc', fontName='Helvetica', fontSize=9, leading=12, textColor=colors.HexColor("#8b0000"))
+
     story = []
 
-    # Logo Travis na górze dokumentu (wbudowane, nie jako header ReportLab)
-    travis_logo_path = "https://travis.pl/wp-content/uploads/2025/07/logo_travis500.png"
-    logo_img = Image(travis_logo_path, width=1.5*inch, height=0.5*inch)
-    logo_img.hAlign = 'CENTER'
-    story.append(logo_img)
-    story.append(Spacer(1, 0.2*inch))
+    # 1. LOGO (Z zachowaniem proporcji)
+    logo_url = "https://travis.pl/wp-content/uploads/2025/07/logo_travis500.png"
+    logo = Image(logo_url, width=4.5*cm, height=1.3*cm) # Zgrabne i mniejsze
+    logo.hAlign = 'LEFT'
+    story.append(logo)
+    story.append(Spacer(1, 10))
 
-    # Zdjęcie główne (jeśli wgrane)
-    if foto_buffer:
-        img_pil = PILImage.open(foto_buffer)
-        aspect_ratio = img_pil.width / img_pil.height
-        img_width = 5.5 * inch # Ustalona szerokość
-        img_height = img_width / aspect_ratio
-        
-        img = Image(foto_buffer, width=img_width, height=img_height)
+    # 2. ZDJĘCIE GŁÓWNE
+    if foto:
+        img = Image(foto, width=17*cm, height=8*cm, kind='proportional')
         img.hAlign = 'CENTER'
         story.append(img)
-        story.append(Spacer(1, 0.2*inch))
-
-    # Tytuł oferty
-    story.append(Paragraph(tytul, styles['TravisTitle']))
-    story.append(Paragraph(f"Termin: {termin}", styles['TravisSubtitle']))
-    story.append(Spacer(1, 0.4*inch))
-
-    # Plan wycieczki
-    story.append(Paragraph("PLAN PODROZY:", styles['TravisHeader']))
-    for line in plan.split('\n'):
-        if line.strip():
-            story.append(Paragraph(line, styles['TravisNormal']))
-    story.append(Spacer(1, 0.2*inch))
-
-    # Cennik (tabela)
-    ceny_data = [['Konfiguracja grupy', 'Cena za osobę']]
-    for line in ceny_raw.split('\n'):
-        if '|' in line:
-            ceny_data.append([item.strip() for item in line.split('|')])
-        elif line.strip():
-            ceny_data.append([line.strip(), '']) # Umożliwia wpisanie linii bez '|'
     
-    if len(ceny_data) > 1:
-        ceny_table = Table(ceny_data, colWidths=[2.5*inch, 3*inch])
-        ceny_table.setStyle(TableStyle([
-            ('BACKGROUND', (0,0), (-1,0), TRAVIS_BLUE),
-            ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
-            ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-            ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
-            ('BOTTOMPADDING', (0,0), (-1,0), 12),
-            ('BACKGROUND', (0,1), (-1,-1), colors.white),
-            ('GRID', (0,0), (-1,-1), 1, TRAVIS_BLUE),
-            ('LEFTPADDING', (0,0), (-1,-1), 6),
-            ('RIGHTPADDING', (0,0), (-1,-1), 6),
-            ('TOPPADDING', (0,0), (-1,-1), 6),
-            ('BOTTOMPADDING', (0,0), (-1,-1), 6),
-        ]))
-        story.append(Paragraph("CENNIK:", styles['TravisHeader']))
-        story.append(ceny_table)
-        story.append(Spacer(1, 0.2*inch))
+    story.append(Spacer(1, 20))
+    story.append(Paragraph(tytul.upper(), style_title))
+    story.append(Paragraph(f"TERMIN: {termin}", ParagraphStyle('Sub', alignment=1, fontSize=12, textColor=COLOR_NAVY)))
+    story.append(Spacer(1, 20))
 
-    # Cena zawiera / nie zawiera (dwie kolumny)
-    includes_list = [Paragraph(f"• {line.strip()}", styles['TravisIncludes']) for line in zawiera.split('\n') if line.strip()]
-    excludes_list = [Paragraph(f"• {line.strip()}", styles['TravisExcludes']) for line in nie_zawiera.split('\n') if line.strip()]
-
-    data_details = [
-        [Paragraph("CENA ZAWIERA:", styles['TravisHeader']), Paragraph("CENA NIE ZAWIERA:", styles['TravisHeader'])]
-    ]
-    
-    max_rows = max(len(includes_list), len(excludes_list))
-    for i in range(max_rows):
-        row = []
-        row.append(includes_list[i] if i < len(includes_list) else Paragraph("", styles['TravisNormal']))
-        row.append(excludes_list[i] if i < len(excludes_list) else Paragraph("", styles['TravisNormal']))
-        data_details.append(row)
-
-    details_table = Table(data_details, colWidths=[2.75*inch, 2.75*inch])
-    details_table.setStyle(TableStyle([
-        ('ALIGN', (0,0), (-1,-1), 'LEFT'),
-        ('VALIGN', (0,0), (-1,-1), 'TOP'),
-        ('LEFTPADDING', (0,0), (-1,-1), 0),
-        ('RIGHTPADDING', (0,0), (-1,-1), 0),
-        ('TOPPADDING', (0,0), (-1,-1), 0),
-        ('BOTTOMPADDING', (0,0), (-1,-1), 0),
-        ('SPAN', (0,0), (0,0)), # Rozciągnij nagłówki
-        ('SPAN', (1,0), (1,0)),
+    # 3. PLAN WYCIECZKI (W białym bloku)
+    story.append(Paragraph("PROGRAM WYCIECZKI", style_h))
+    plan_box = [[Paragraph(plan.replace('\n', '<br/>'), style_p)]]
+    t_plan = Table(plan_box, colWidths=[17*cm])
+    t_plan.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,-1), COLOR_WHITE),
+        ('BOX', (0,0), (-1,-1), 0.5, COLOR_NAVY),
+        ('LEFTPADDING', (0,0), (-1,-1), 15),
+        ('RIGHTPADDING', (0,0), (-1,-1), 15),
+        ('TOPPADDING', (0,0), (-1,-1), 15),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 15),
     ]))
-    story.append(details_table)
-    story.append(Spacer(1, 0.5*inch))
+    story.append(t_plan)
 
-    # Stopka jako element na końcu dokumentu (nie jako footer ReportLab)
-    footer_text = f"Biuro Podrozy TRAVIS | tel: {tel} | e-mail: {email}\nwpis do Rejestru Organizatorów i Posredników Turystycznych pod numerem 41059"
-    story.append(Paragraph(footer_text, styles['TravisFooter']))
+    # 4. TABELA CEN (Zgrabniejsza i mniejsza)
+    story.append(Paragraph("KOSZT UCZESTNICTWA", style_h))
+    t_prices = Table(cennik_data, colWidths=[6*cm, 4*cm])
+    t_prices.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), COLOR_NAVY),
+        ('TEXTCOLOR', (0,0), (-1,0), COLOR_WHITE),
+        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+        ('BACKGROUND', (0,1), (-1,-1), COLOR_WHITE),
+        ('GRID', (0,0), (-1,-1), 0.5, COLOR_NAVY),
+        ('FONTSIZE', (0,0), (-1,-1), 9),
+    ]))
+    t_prices.hAlign = 'LEFT'
+    story.append(t_prices)
 
+    # 5. ZAWIERA / NIE ZAWIERA
+    story.append(Spacer(1, 20))
+    data_inf = [
+        [Paragraph("CENA ZAWIERA", style_h), Paragraph("CENA NIE ZAWIERA", style_h)],
+        [Paragraph(zawiera.replace('\n', '<br/>'), style_inc), Paragraph(nie_zawiera.replace('\n', '<br/>'), style_exc)]
+    ]
+    t_inf = Table(data_inf, colWidths=[8.5*cm, 8.5*cm])
+    t_inf.setStyle(TableStyle([('VALIGN', (0,0), (-1,-1), 'TOP')]))
+    story.append(t_inf)
+
+    # Budowanie dokumentu z tłem
+    doc.addPageTemplates([PageTemplate(id='Travis', frames=Frame(doc.leftMargin, doc.bottomMargin, doc.width, doc.height), onPage=draw_fixed_elements)])
     doc.build(story)
-    buffer.seek(0)
     return buffer.getvalue()
 
 # --- INTERFEJS STREAMLIT ---
-st.title("✨ Nowoczesny Generator Ofert TRAVIS (PDF)")
+st.title("🏝️ Generator Ofert Travis")
 
 with st.sidebar:
-    st.header("🖼️ Dane Kontaktowe i Zdjęcia")
-    u_tel = st.text_input("Telefon biura", value="789 563 405")
-    u_mail = st.text_input("E-mail biura", value="biuro@travis.pl")
-    st.markdown("---")
-    foto_glowne_upload = st.file_uploader("Wgraj zdjęcie główne (do PDF)", type=['jpg', 'png'])
+    st.header("⚙️ Konfiguracja")
+    st.session_state['tel'] = st.text_input("Telefon", "789 563 405")
+    st.session_state['mail'] = st.text_input("E-mail", "biuro@travis.pl")
+    foto = st.file_uploader("Zdjęcie główne", type=['jpg', 'png'])
 
 col1, col2 = st.columns(2)
 with col1:
-    tytul = st.text_input("Tytuł wycieczki", placeholder="np. MALTA 4 DNI - City Break")
-    termin = st.text_input("Termin wyjazdu", placeholder="np. 27.06 - 01.07.2026")
+    u_tytul = st.text_input("Nazwa wycieczki")
+    u_termin = st.text_input("Termin")
 with col2:
-    st.write("**💰 Konfiguracje cenowe (jedna na linię)**")
-    ceny_input = st.text_area("np. 46-50 os. | 3 395 zł\n40-45 os. | 3 470 zł", height=100)
+    u_ceny = st.text_area("Ceny (np. 46-50 os. | 3395 zł)", height=70)
 
-st.markdown("### 🗺️ Plan podróży")
-plan_input = st.text_area("Wpisz plan dnia po dniu", height=250, placeholder="DZIEŃ 1: ...\nDZIEŃ 2: ...")
+u_plan = st.text_area("Plan wycieczki", height=200)
+u_zawiera = st.text_area("Zawiera", height=100)
+u_nie_zawiera = st.text_area("Nie zawiera", height=100)
 
-col_det1, col_det2 = st.columns(2)
-with col_det1:
-    zawiera_input = st.text_area("✅ Cena zawiera:", height=150, placeholder="- Przejazdy autokarem\n- Noclegi...")
-with col_det2:
-    nie_zawiera_input = st.text_area("❌ Cena nie zawiera:", height=150, placeholder="- Bilety wstępu (ok. 130 EUR)\n- Wydatki własne...")
-
-st.markdown("---")
-
-if st.button("🚀 GENERUJ PROFESJONALNY PLIK PDF"):
-    if not (tytul and termin and plan_input and ceny_input and zawiera_input and nie_zawiera_input):
-        st.error("Wypełnij wszystkie pola, aby wygenerować ofertę!")
-    else:
-        pdf_buffer = generate_travis_pdf(tytul, termin, plan_input, ceny_input, zawiera_input, nie_zawiera_input, foto_glowne_upload, u_tel, u_mail)
-        
-        st.download_button(
-            label="📥 POBIERZ OFERTĘ PDF",
-            data=pdf_buffer,
-            file_name=f"Oferta_Travis_{tytul.replace(' ', '_')}.pdf",
-            mime="application/pdf",
-            type="primary"
-        )
-        st.success("PDF został wygenerowany i jest gotowy do pobrania!")
-
-# Brak stopki w Streamlit, bo jest w PDF
+if st.button("🚀 GENERUJ NOWOCZESNY PDF"):
+    # Przygotowanie danych tabeli cen
+    prices = [["Grupa", "Cena"]]
+    for line in u_ceny.split('\n'):
+        if '|' in line: prices.append(line.split('|'))
+    
+    pdf = generate_pdf(u_tytul, u_termin, u_plan, prices, u_zawiera, u_nie_zawiera, foto)
+    st.download_button("📥 Pobierz gotowy PDF", data=pdf, file_name="oferta_travis.pdf", mime="application/pdf")
