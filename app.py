@@ -1,92 +1,107 @@
 import streamlit as st
-from fpdf import FPDF
-import base64
 
-# Konfiguracja strony - kolory Travis (Granat: #002d5a)
-st.set_page_config(page_title="Generator TRAVIS", page_icon="✈️", layout="wide")
+# Konfiguracja strony - stylistyka Travis (Granat: #002d5a)
+st.set_page_config(page_title="Kreator Ofert TRAVIS", page_icon="✈️", layout="wide")
 
-# Custom CSS - tylko kolory z logo (Granat i Biel)
+# CSS dla zachowania kolorystyki logo i stałej stopki
 st.markdown("""
     <style>
     .main { background-color: #ffffff; }
-    .stButton>button { 
-        background-color: #002d5a; 
-        color: white; 
-        border-radius: 0px; 
-        border: none;
-        height: 3em;
-        font-weight: bold;
-    }
-    .stButton>button:hover { background-color: #004080; color: white; }
     h1, h2, h3 { color: #002d5a; font-family: 'Arial'; border-left: 5px solid #002d5a; padding-left: 15px; }
-    .stTextInput>div>div>input, .stTextArea>div>div>textarea { border-color: #002d5a; }
-    .stTable { border: 1px solid #002d5a; }
+    .stButton>button { 
+        background-color: #002d5a; color: white; border-radius: 0px; border: none; font-weight: bold; width: 100%;
+    }
+    .footer {
+        position: fixed;
+        left: 0;
+        bottom: 0;
+        width: 100%;
+        background-color: white;
+        color: #002d5a;
+        text-align: center;
+        padding: 10px;
+        border-top: 1px solid #002d5a;
+        font-size: 12px;
+        z-index: 999;
+    }
+    @media print {
+        .no-print { display: none !important; }
+        .footer { position: fixed; bottom: 0; }
+    }
     </style>
     """, unsafe_allow_html=True)
 
-# Logo Travis
+# Nagłówek z logo
 LOGO_URL = "https://travis.pl/wp-content/uploads/2025/07/logo_travis500.png"
 st.image(LOGO_URL, width=220)
 
-st.title("GENERATOR OFERT")
+st.title("PROFESJONALNY KREATOR OFERT")
 
-# --- PANEL BOCZNY ---
+# --- PANEL BOCZNY (SIDEBAR) ---
 with st.sidebar:
-    st.header("🖼️ Multimedia")
-    foto_glowne = st.file_uploader("Wgraj zdjęcie główne (format poziomy najlepiej)", type=['jpg', 'png'])
-    st.markdown("---")
-    st.write("📩 **Kontakt w stopce:**")
-    st.write("789 563 405 | biuro@travis.pl")
-
-# --- FORMULARZ ---
-col_head1, col_head2 = st.columns([2, 1])
-
-with col_head1:
-    tytul = st.text_input("Kierunek / Nazwa wycieczki", placeholder="np. MALTA - PERŁA MEDYTACJI")
-    termin = st.text_input("Termin wyjazdu", placeholder="np. 27.06 - 01.07.2026")
-
-with col_head2:
-    st.write("**💰 Wycena grupy**")
-    c1 = st.text_input("Opcja 1 (Liczba osób | Cena)", placeholder="46-50 os. | 3 395 zł")
-    c2 = st.text_input("Opcja 2 (Liczba osób | Cena)", placeholder="40-45 os. | 3 470 zł")
-    c3 = st.text_input("Opcja 3 (Liczba osób | Cena)", placeholder="35-39 os. | 3 545 zł")
-
-st.markdown("### 🗺️ Plan podróży")
-plan = st.text_area("Wpisz szczegółowy plan (ładnie sformatowany)", height=300, 
-                    placeholder="DZIEŃ 1:\n...\n\nDZIEŃ 2:\n...")
-
-col_details1, col_details2 = st.columns(2)
-with col_details1:
-    st.markdown("### ✅ Cena zawiera")
-    zawiera = st.text_area("Lista świadczeń", height=180, placeholder="- Przejazd autokarem...\n- Noclegi...")
-
-with col_details2:
-    st.markdown("### ❌ Cena nie zawiera")
-    nie_zawiera = st.text_area("Koszty dodatkowe", height=180, placeholder="- Bilety wstępu i przewodnicy (ok. 130 EUR)...")
-
-# --- STOPKA KONTAKTOWA ---
-st.markdown("---")
-st.markdown(
-    "<div style='text-align: center; color: #002d5a; font-weight: bold;'>"
-    "Biuro Podróży TRAVIS | tel: 789 563 405 | e-mail: biuro@travis.pl <br>"
-    "Wpis do Rejestru Organizatorów Turystycznych nr 41059"
-    "</div>", 
-    unsafe_allow_html=True
-)
-
-# --- PODGLĄD I GENEROWANIE ---
-if st.checkbox("Pokaż podgląd dokumentu"):
-    if foto_glowne:
-        st.image(foto_glowne, use_container_width=True)
-    st.header(tytul)
-    st.write(f"📅 **TERMIN:** {termin}")
-    st.write(plan)
+    st.header("🖼️ Multimedia i Kontakt")
+    foto_glowne = st.file_uploader("Wgraj zdjęcie główne", type=['jpg', 'png'], key="main_foto")
+    galeria = st.file_uploader("Dodatkowa galeria zdjęć (wiele plików)", type=['jpg', 'png'], accept_multiple_files=True)
     
-    st.table({
-        "Konfiguracja grupy": ["Opcja I", "Opcja II", "Opcja III"],
-        "Szczegóły i Cena": [c1, c2, c3]
-    })
+    st.markdown("---")
+    u_tel = st.text_input("Telefon biura", value="789 563 405")
+    u_mail = st.text_input("E-mail biura", value="biuro@travis.pl")
 
-if st.button("💾 PRZYGOTUJ DO DRUKU (PDF)"):
-    st.info("💡 INSTRUKCJA: Po kliknięciu przycisku naciśnij **Ctrl + P** (lub Cmd + P na Macu). \n"
-             "W ustawieniach drukowania wybierz **'Zapisz jako PDF'** oraz zaznacz opcję **'Grafika tła'**, aby zachować kolory Travis.")
+# --- FORMULARZ GŁÓWNY ---
+col1, col2 = st.columns([2, 1])
+
+with col1:
+    tytul = st.text_input("Kierunek / Tytuł oferty", placeholder="np. MALTA 4 DNI - City Break")
+    termin = st.text_input("Termin wycieczki", placeholder="np. 27 czerwca - 1 lipca 2026")
+    plan = st.text_area("Plan wycieczki (Dzień po dniu)", height=300, placeholder="DZIEŃ 1: ...\nDZIEŃ 2: ...")
+
+with col2:
+    st.write("**💰 Konfiguracje cenowe**")
+    c1 = st.text_input("Grupa 1 (np. 46-50 os.)", placeholder="3 395,00 zł")
+    c2 = st.text_input("Grupa 2 (np. 40-45 os.)", placeholder="3 470,00 zł")
+    c3 = st.text_input("Grupa 3 (np. 35-39 os.)", placeholder="3 545,00 zł")
+
+st.markdown("---")
+
+col_a, col_b = st.columns(2)
+with col_a:
+    zawiera = st.text_area("✅ Cena zawiera:", height=200, placeholder="- Transfery\n- Noclegi\n- Wyżywienie...")
+with col_b:
+    nie_zawiera = st.text_area("❌ Cena nie zawiera:", height=200, placeholder="- Bilety wstępu (ok. 130 EUR)\n- Wydatki własne...")
+
+# --- SEKCJA PODGLĄDU ---
+st.markdown("### 👁️ Podgląd dokumentu")
+
+if foto_glowne:
+    st.image(foto_glowne, use_container_width=True)
+
+st.header(tytul)
+st.subheader(f"📅 {termin}")
+
+st.write("**PROGRAM PODRÓŻY:**")
+st.write(plan)
+
+# Tabela cenowa
+st.table({
+    "Wielkość grupy": ["Największa", "Średnia", "Najmniejsza"],
+    "Cena za osobę": [c1, c2, c3]
+})
+
+# Galeria zdjęć na dole
+if galeria:
+    st.markdown("### 📸 Galeria zdjęć")
+    cols = st.columns(3)
+    for idx, img in enumerate(galeria):
+        cols[idx % 3].image(img, use_container_width=True)
+
+# --- ZASZYTA STOPKA ---
+st.markdown(f"""
+    <div class="footer">
+        <p>Biuro Podróży TRAVIS | tel: {u_tel} | e-mail: {u_mail}<br>
+        <b>wpis do Rejestru Organizatorów i Pośredników Turystycznych pod numerem 41059</b></p>
+    </div>
+    """, unsafe_allow_html=True)
+
+# Przycisk pomocniczy
+if st.button("🖨️ PRZYGOTUJ DO WYDRUKU PDF"):
+    st.info("💡 Instrukcja: Naciśnij Ctrl+P. W oknie drukowania wybierz 'Zapisz jako PDF'.")
