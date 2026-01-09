@@ -9,14 +9,13 @@ from reportlab.pdfbase.ttfonts import TTFont
 from io import BytesIO
 import requests
 
-# --- FORSOWANIE POLSKICH ZNAKÓW ---
+# --- FORSOWANIE CZCIONKI Z POLSKIMI ZNAKAMI ---
 @st.cache_data
 def setup_fonts():
     try:
-        # Open Sans – jedna z najlepiej zoptymalizowanych czcionek pod PDFy
-        u_reg = "https://github.com/google/fonts/raw/main/ofl/opensans/OpenSans%5Bwdth%2Cwght%5D.ttf"
-        res = requests.get(u_reg)
-        # Rejestrujemy czcionkę pod prostą nazwą 'Standard'
+        # Open Sans – stabilna czcionka wspierająca polskie znaki
+        url = "https://github.com/google/fonts/raw/main/ofl/opensans/OpenSans%5Bwdth%2Cwght%5D.ttf"
+        res = requests.get(url)
         pdfmetrics.registerFont(TTFont('Standard', BytesIO(res.content)))
         return 'Standard'
     except:
@@ -27,16 +26,16 @@ FONT_NAME = setup_fonts()
 # --- KOLORY ---
 NAVY = colors.HexColor("#002d5a")
 BG_LIGHT = colors.HexColor("#f5f7f9")
-TEXT_BLACK = colors.HexColor("#1a1a1a")
+TEXT_BLACK = colors.HexColor("#121212")
 WHITE = colors.white
 
+# --- ELEMENTY GRAFICZNE ---
 def my_page_layout(canvas, doc):
     canvas.saveState()
-    # Tło strony
     canvas.setFillColor(BG_LIGHT)
     canvas.rect(0, 0, A4[0], A4[1], fill=1, stroke=0)
     
-    # Subtelny element fali
+    # Subtelna fala na dole
     canvas.setFillColor(NAVY)
     path = canvas.beginPath()
     path.moveTo(0, 0)
@@ -58,27 +57,25 @@ def generate_pdf(tytul, termin, plan, ceny, zawiera, foto_main, galeria):
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=1.5*cm, rightMargin=1.5*cm, topMargin=1*cm, bottomMargin=3*cm)
     
-    # Definiowanie stylów z wymuszonym FONT_NAME
-    s = getSampleStyleSheet()
-    style_title = ParagraphStyle('T', fontName=FONT_NAME, fontSize=22, textColor=NAVY, alignment=1, spaceAfter=10)
+    style_title = ParagraphStyle('T', fontName=FONT_NAME, fontSize=22, textColor=NAVY, alignment=1)
     style_term = ParagraphStyle('S', fontName=FONT_NAME, fontSize=11, textColor=TEXT_BLACK, alignment=1)
     style_h = ParagraphStyle('H', fontName=FONT_NAME, fontSize=10, textColor=NAVY, spaceAfter=6, borderLeftWidth=2, borderLeftColor=NAVY, leftIndent=5)
     style_p = ParagraphStyle('P', fontName=FONT_NAME, fontSize=9, leading=12, textColor=TEXT_BLACK)
     
     story = []
     
-    # 1. LOGO NA ŚRODKU
+    # 1. LOGO - DUŻE I NA ŚRODKU
     logo_url = "https://travis.pl/wp-content/uploads/2025/07/logo_travis500.png"
     try:
-        logo = Image(BytesIO(requests.get(logo_url).content), width=8*cm, height=2.5*cm, kind='proportional')
+        logo = Image(BytesIO(requests.get(logo_url).content), width=8.5*cm, height=2.5*cm, kind='proportional')
         logo.hAlign = 'CENTER'
         story.append(logo)
     except: pass
-    story.append(Spacer(1, 15))
+    story.append(Spacer(1, 25))
 
     # 2. TYTUŁ I TERMIN
     story.append(Paragraph(tytul.upper(), style_title))
-    story.append(Spacer(1, 5))
+    story.append(Spacer(1, 10))
     story.append(Paragraph(f"📅 TERMIN: {termin}", style_term))
     story.append(Spacer(1, 20))
 
@@ -87,16 +84,17 @@ def generate_pdf(tytul, termin, plan, ceny, zawiera, foto_main, galeria):
         img = Image(foto_main, width=17*cm, height=7*cm, kind='proportional')
         img.hAlign = 'CENTER'
         story.append(img)
-        story.append(Spacer(1, 20))
+        story.append(Spacer(1, 25))
 
-    # 4. BLOKI TEKSTOWE (Mniejsze zaokrąglenie - 4pt)
-    def create_card(content_para):
-        t = Table([[content_para]], colWidths=[17.5*cm])
+    # 4. BLOKI (Mniejsze zaokrąglenie - 5pt)
+    def create_card(content_para, width=17.5*cm):
+        t = Table([[content_para]], colWidths=[width])
         t.setStyle(TableStyle([
             ('BACKGROUND', (0,0), (-1,-1), WHITE),
-            ('ROUNDEDCORNERS', [4, 4, 4, 4]),
+            ('ROUNDEDCORNERS', [5, 5, 5, 5]),
             ('LEFTPADDING', (0,0), (-1,-1), 15),
             ('TOPPADDING', (0,0), (-1,-1), 12),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 12),
             ('BOTTOMPADDING', (0,0), (-1,-1), 12),
         ]))
         return t
@@ -105,19 +103,20 @@ def generate_pdf(tytul, termin, plan, ceny, zawiera, foto_main, galeria):
     story.append(create_card(Paragraph(plan.replace('\n', '<br/>'), style_p)))
     story.append(Spacer(1, 15))
 
-    # KOSZTY I ŚWIADCZENIA
+    # KOSZTY I ŚWIADCZENIA (Naprawione style tabeli)
     c1 = [Paragraph("💰 KOSZTY", style_h), Paragraph(ceny.replace('\n', '<br/>'), style_p)]
     c2 = [Paragraph("📋 ŚWIADCZENIA", style_h), Paragraph(zawiera.replace('\n', '<br/>'), style_p)]
     
     t_side = Table([
-        [Table([[c1]], colWidths=[8.4*cm], style=[('BACKGROUND', (0,0), (-1,-1), WHITE), ('ROUNDEDCORNERS', [4,4,4,4]), ('PADDING', 10)]),
-         Table([[c2]], colWidths=[8.4*cm], style=[('BACKGROUND', (0,0), (-1,-1), WHITE), ('ROUNDEDCORNERS', [4,4,4,4]), ('PADDING', 10)])]
+        [Table([[c1]], colWidths=[8.3*cm], style=[('BACKGROUND', (0,0), (-1,-1), WHITE), ('ROUNDEDCORNERS', [5,5,5,5])]),
+         Table([[c2]], colWidths=[8.3*cm], style=[('BACKGROUND', (0,0), (-1,-1), WHITE), ('ROUNDEDCORNERS', [5,5,5,5])])]
     ], colWidths=[8.7*cm, 8.7*cm])
-    story.append(t_split := t_side)
-    story.append(Spacer(1, 15))
+    t_side.setStyle(TableStyle([('VALIGN', (0,0), (-1,-1), 'TOP'), ('LEFTPADDING', (0,0), (-1,-1), 0)]))
+    story.append(t_side)
 
     # 5. GALERIA
     if galeria:
+        story.append(Spacer(1, 20))
         story.append(Paragraph("📸 GALERIA", style_h))
         row, g_data = [], []
         for i, f in enumerate(galeria):
@@ -133,22 +132,30 @@ def generate_pdf(tytul, termin, plan, ceny, zawiera, foto_main, galeria):
     doc.build(story)
     return buffer.getvalue()
 
-# --- STREAMLIT ---
+# --- INTERFEJS STREAMLIT ---
+st.set_page_config(page_title="Travis Offer Designer", page_icon="✈️")
 st.title("✈️ Travis Offer Designer")
 
 with st.sidebar:
-    st.session_state['tel'] = st.text_input("Tel", "789 563 405")
+    st.header("Ustawienia stopki")
+    st.session_state['tel'] = st.text_input("Telefon", "789 563 405")
     st.session_state['mail'] = st.text_input("E-mail", "biuro@travis.pl")
-    f_main = st.file_uploader("Główne", type=['jpg','png'])
-    f_gal = st.file_uploader("Galeria", type=['jpg','png'], accept_multiple_files=True)
+    f_main = st.file_uploader("Zdjęcie główne", type=['jpg','png'])
+    f_gal = st.file_uploader("Zdjęcia do galerii", type=['jpg','png'], accept_multiple_files=True)
 
-u_t = st.text_input("Tytuł")
+u_t = st.text_input("Tytuł wycieczki")
 u_d = st.text_input("Termin")
-u_p = st.text_area("Program")
-u_c = st.text_area("Koszt")
-u_s = st.text_area("Świadczenia")
+u_p = st.text_area("Program wycieczki", height=200)
+u_c = st.text_area("Koszt uczestnictwa", height=100)
+u_s = st.text_area("Świadczenia", height=100)
 
-if st.button("GENERUJ PDF"):
+if st.button("🚀 GENERUJ PDF"):
     if u_t:
-        pdf_out = generate_pdf(u_t, u_d, u_p, u_c, u_s, f_main, f_gal)
-        st.download_button("📥 POBIERZ OFERTĘ", data=pdf_out, file_name=f"Oferta_Travis.pdf", mime="application/pdf")
+        try:
+            pdf_out = generate_pdf(u_t, u_d, u_p, u_c, u_s, f_main, f_gal)
+            st.success("PDF wygenerowany pomyślnie!")
+            st.download_button("📥 POBIERZ OFERTĘ", data=pdf_out, file_name=f"Oferta_Travis_{u_t}.pdf", mime="application/pdf")
+        except Exception as e:
+            st.error(f"Wystąpił błąd podczas generowania: {e}")
+    else:
+        st.warning("Wpisz tytuł wycieczki!")
