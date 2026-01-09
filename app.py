@@ -159,4 +159,19 @@ st.title("🏝️ Travis Designer Premium")
 with st.sidebar:
     st.header("Kontakt w stopce")
     st.session_state['tel'] = st.text_input("Numer telefonu", "789 563 405")
-    st.session_state['mail'] = st.text_
+    st.session_state['mail'] = st.text_input("Adres e-mail", "biuro@travis.pl")
+    f_main = st.file_uploader("Zdjęcie główne", type=['jpg','png'])
+    f_gal = st.file_uploader("Galeria", type=['jpg','png'], accept_multiple_files=True)
+
+u_t = st.text_input("Tytuł")
+u_d = st.text_input("Termin")
+u_p = st.text_area("Program")
+c1, c2, c3 = st.columns(3)
+with c1: u_k = st.text_area("Koszt")
+with c2: u_z = st.text_area("Cena zawiera")
+with c3: u_nz = st.text_area("Cena nie zawiera")
+
+if st.button("🚀 GENERUJ PDF"):
+    if u_t:
+        pdf_final = generate_pdf(u_t, u_d, u_p, u_k, u_z, u_nz, f_main, f_gal)
+        st.download_button("📥 POBIERZ", data=pdf_final, file_name=f"Oferta_Travis_{u_t}.pdf")
