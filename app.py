@@ -27,8 +27,22 @@ NAVY = colors.HexColor("#002d5a")
 BG_LIGHT = colors.HexColor("#f5f7f9")
 TEXT_BLACK = colors.HexColor("#121212")
 WHITE = colors.white
+BORDER_COLOR = colors.HexColor("#d1d9e0")
 
-# --- NAGŁÓWEK I STOPKA (POWTARZALNE NA KAŻDEJ STRONIE) ---
+# --- FUNKCJA RYSOWANIA RAMKI DLA ZDJĘĆ ---
+def create_bordered_image(img_file, width, height):
+    """Tworzy obrazek wewnątrz tabeli, która służy jako ramka."""
+    img = Image(img_file, width=width, height=height, kind='proportional')
+    t = Table([[img]], colWidths=[width + 0.4*cm], rowHeights=[height + 0.4*cm])
+    t.setStyle(TableStyle([
+        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('BOX', (0,0), (-1,-1), 0.5, NAVY), # Cienka granatowa ramka
+        ('BACKGROUND', (0,0), (-1,-1), WHITE),
+    ]))
+    return t
+
+# --- NAGŁÓWEK I STOPKA (POWTARZALNE) ---
 def my_page_layout(canvas, doc):
     canvas.saveState()
     
@@ -36,12 +50,14 @@ def my_page_layout(canvas, doc):
     canvas.setFillColor(BG_LIGHT)
     canvas.rect(0, 0, A4[0], A4[1], fill=1, stroke=0)
     
-    # 2. LOGO NA ŚRODKU (Nagłówek każdej strony)
+    # 2. LOGO (Naprawione rysowanie bezpośrednie)
     logo_url = "https://travis.pl/wp-content/uploads/2025/07/logo_travis500.png"
     try:
-        # Pobieramy logo do rysowania bezpośrednio na canvasie
-        logo_data = BytesIO(requests.get(logo_url).content)
-        canvas.drawImage(Image(logo_data).filename, (A4[0]-8.5*cm)/2, A4[1]-3*cm, width=8.5*cm, preserveAspectRatio=True, mask='auto')
+        # Pobieramy logo jednorazowo
+        response = requests.get(logo_url)
+        logo_img = BytesIO(response.content)
+        # Rysujemy logo na środku góry
+        canvas.drawImage(Image(logo_img).filename, (A4[0]-8*cm)/2, A4[1]-2.8*cm, width=8*cm, preserveAspectRatio=True, mask='auto')
     except:
         pass
 
@@ -50,29 +66,28 @@ def my_page_layout(canvas, doc):
     path = canvas.beginPath()
     path.moveTo(0, 0)
     path.lineTo(A4[0], 0)
-    path.lineTo(A4[0], 2*cm)
-    path.curveTo(A4[0]*0.7, 1*cm, A4[0]*0.3, 3*cm, 0, 1.5*cm)
+    path.lineTo(A4[0], 2.2*cm)
+    path.curveTo(A4[0]*0.7, 1.2*cm, A4[0]*0.3, 3.2*cm, 0, 1.7*cm)
     path.close()
     canvas.drawPath(path, fill=1, stroke=0)
     
-    # 4. Stopka (Tekst na fali)
+    # 4. Stopka
     canvas.setFillColor(WHITE)
     canvas.setFont(FONT_NAME, 7)
     u_tel = st.session_state.get('tel', '789 563 405')
     u_mail = st.session_state.get('mail', 'biuro@travis.pl')
-    canvas.drawCentredString(A4[0]/2, 1*cm, f"Biuro Podróży TRAVIS | tel: {u_tel} | e-mail: {u_mail} | Rejestr nr 41059")
+    canvas.drawCentredString(A4[0]/2, 1.1*cm, f"Biuro Podróży TRAVIS | tel: {u_tel} | e-mail: {u_mail} | Rejestr nr 41059")
     
     canvas.restoreState()
 
 def generate_pdf(tytul, termin, plan, ceny, zawiera, foto_main, galeria):
     buffer = BytesIO()
-    # Zwiększony topMargin, aby treść nie nachodziła na logo w nagłówku
-    doc = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=1.5*cm, rightMargin=1.5*cm, topMargin=3.5*cm, bottomMargin=3*cm)
+    doc = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=1.5*cm, rightMargin=1.5*cm, topMargin=3.5*cm, bottomMargin=3.5*cm)
     
     style_title = ParagraphStyle('T', fontName=FONT_NAME, fontSize=22, textColor=NAVY, alignment=1)
     style_term = ParagraphStyle('S', fontName=FONT_NAME, fontSize=11, textColor=TEXT_BLACK, alignment=1)
     style_h = ParagraphStyle('H', fontName=FONT_NAME, fontSize=10, textColor=NAVY, spaceAfter=6, borderLeftWidth=2, borderLeftColor=NAVY, leftIndent=5)
-    style_p = ParagraphStyle('P', fontName=FONT_NAME, fontSize=9, leading=12, textColor=TEXT_BLACK)
+    style_p = ParagraphStyle('P', fontName=FONT_NAME, fontSize=9, leading=13, textColor=TEXT_BLACK)
     
     story = []
     
@@ -82,19 +97,18 @@ def generate_pdf(tytul, termin, plan, ceny, zawiera, foto_main, galeria):
     story.append(Paragraph(f"📅 TERMIN: {termin}", style_term))
     story.append(Spacer(1, 20))
 
-    # 2. ZDJĘCIE GŁÓWNE
+    # 2. ZDJĘCIE GŁÓWNE W RAMCE
     if foto_main:
-        img = Image(foto_main, width=17*cm, height=7*cm, kind='proportional')
-        img.hAlign = 'CENTER'
-        story.append(img)
+        bordered_img = create_bordered_image(foto_main, 16.5*cm, 7*cm)
+        story.append(bordered_img)
         story.append(Spacer(1, 25))
 
-    # FUNKCJA KARTY (Zaokrąglenie 5pt)
+    # FUNKCJA KARTY (Zaokrąglenie 4pt)
     def create_card(content_para, width=17.5*cm):
         t = Table([[content_para]], colWidths=[width])
         t.setStyle(TableStyle([
             ('BACKGROUND', (0,0), (-1,-1), WHITE),
-            ('ROUNDEDCORNERS', [5, 5, 5, 5]),
+            ('ROUNDEDCORNERS', [4, 4, 4, 4]),
             ('LEFTPADDING', (0,0), (-1,-1), 15),
             ('TOPPADDING', (0,0), (-1,-1), 12),
             ('BOTTOMPADDING', (0,0), (-1,-1), 12),
@@ -111,55 +125,46 @@ def generate_pdf(tytul, termin, plan, ceny, zawiera, foto_main, galeria):
     c2 = [Paragraph("📋 ŚWIADCZENIA", style_h), Paragraph(zawiera.replace('\n', '<br/>'), style_p)]
     
     t_side = Table([
-        [Table([[c1]], colWidths=[8.3*cm], style=[('BACKGROUND', (0,0), (-1,-1), WHITE), ('ROUNDEDCORNERS', [5,5,5,5])]),
-         Table([[c2]], colWidths=[8.3*cm], style=[('BACKGROUND', (0,0), (-1,-1), WHITE), ('ROUNDEDCORNERS', [5,5,5,5])])]
+        [create_card(c1, width=8.3*cm), create_card(c2, width=8.3*cm)]
     ], colWidths=[8.7*cm, 8.7*cm])
     t_side.setStyle(TableStyle([('VALIGN', (0,0), (-1,-1), 'TOP'), ('LEFTPADDING', (0,0), (-1,-1), 0)]))
     story.append(t_side)
 
-    # 5. GALERIA
+    # 5. GALERIA W RAMKACH
     if galeria:
         story.append(Spacer(1, 20))
         story.append(Paragraph("📸 GALERIA", style_h))
         row, g_data = [], []
         for i, f in enumerate(galeria):
-            img = Image(f, width=5.5*cm, height=3.5*cm, kind='proportional')
-            row.append(img)
+            img_with_frame = create_bordered_image(f, 5.2*cm, 3.5*cm)
+            row.append(img_with_frame)
             if (i + 1) % 3 == 0:
                 g_data.append(row)
                 row = []
         if row: g_data.append(row)
         story.append(Table(g_data, colWidths=[5.8*cm]*3))
 
-    # REJESTRACJA SZABLONU STRONY
     doc.addPageTemplates([PageTemplate(id='Travis', frames=Frame(doc.leftMargin, doc.bottomMargin, doc.width, doc.height), onPage=my_page_layout)])
     doc.build(story)
     return buffer.getvalue()
 
 # --- INTERFEJS STREAMLIT ---
-st.set_page_config(page_title="Travis Designer", page_icon="✈️")
 st.title("🌊 Travis Designer Premium")
 
 with st.sidebar:
-    st.header("Kontakt")
+    st.header("Dane kontaktowe")
     st.session_state['tel'] = st.text_input("Telefon", "789 563 405")
     st.session_state['mail'] = st.text_input("E-mail", "biuro@travis.pl")
     f_main = st.file_uploader("Zdjęcie główne", type=['jpg','png'])
-    f_gal = st.file_uploader("Galeria", type=['jpg','png'], accept_multiple_files=True)
+    f_gal = st.file_uploader("Zdjęcia do galerii", type=['jpg','png'], accept_multiple_files=True)
 
 u_t = st.text_input("Tytuł")
 u_d = st.text_input("Termin")
-u_p = st.text_area("Program (Dzień po dniu)", height=250)
-col1, col2 = st.columns(2)
-with col1: u_c = st.text_area("Koszt", height=120)
-with col2: u_s = st.text_area("Świadczenia", height=120)
+u_p = st.text_area("Program wycieczki", height=200)
+u_c = st.text_area("Ceny", height=100)
+u_s = st.text_area("Świadczenia", height=100)
 
 if st.button("🚀 GENERUJ PDF"):
     if u_t:
-        try:
-            pdf_out = generate_pdf(u_t, u_d, u_p, u_c, u_s, f_main, f_gal)
-            st.download_button("📥 POBIERZ OFERTĘ", data=pdf_out, file_name=f"Oferta_Travis_{u_t}.pdf", mime="application/pdf")
-        except Exception as e:
-            st.error(f"Błąd: {e}")
-    else:
-        st.warning("Podaj tytuł!")
+        pdf_out = generate_pdf(u_t, u_d, u_p, u_c, u_s, f_main, f_gal)
+        st.download_button("📥 POBIERZ PDF", data=pdf_out, file_name=f"Oferta_Travis_{u_t}.pdf", mime="application/pdf")
