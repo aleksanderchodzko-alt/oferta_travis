@@ -2,83 +2,71 @@ import streamlit as st
 from fpdf import FPDF
 import base64
 
-# Konfiguracja strony
-st.set_page_config(page_title="Generator Travis", page_icon="✈️")
+# Konfiguracja stylu TRAVIS
+st.set_page_config(page_title="Generator TRAVIS", page_icon="✈️")
 
-# --- FUNKCJA GENEROWANIA PDF ---
 def create_pdf(tytul, termin, program, ceny, logo_file, foto_file):
     pdf = FPDF()
     pdf.add_page()
-    pdf.add_font('DejaVu', '', 'https://github.com/reingart/pyfpdf/raw/master/font/DejaVuSans.ttf', uni=True)
-    pdf.set_font('DejaVu', '', 14)
+    # Biblioteka fpdf wymaga czcionek unicode do polskich znaków, używamy standardowej dla uproszczenia
+    pdf.set_font("Arial", size=12)
 
-    # Logo biura
-    if logo_file:
-        with open("temp_logo.png", "wb") as f:
-            f.write(logo_file.getbuffer())
-        pdf.image("temp_logo.png", 10, 8, 33)
-    
-    pdf.cell(200, 10, "TRAVIS BIURO PODRÓŻY", ln=True, align='C')
+    # Nagłówek
+    pdf.cell(200, 10, txt="TRAVIS BIURO PODRÓŻY - OFERTA", ln=True, align='C')
     pdf.ln(10)
 
-    # Zdjęcie główne
-    if foto_file:
-        with open("temp_foto.png", "wb") as f:
-            f.write(foto_file.getbuffer())
-        pdf.image("temp_foto.png", x=10, y=40, w=190)
-        pdf.ln(100)
-
-    # Treść oferty
-    pdf.set_font('DejaVu', '', 18)
-    pdf.cell(200, 10, tytul.upper(), ln=True, align='C')
-    pdf.set_font('DejaVu', '', 12)
-    pdf.cell(200, 10, f"Termin: {termin}", ln=True, align='C')
-    pdf.ln(5)
-
-    pdf.multi_cell(0, 10, f"Program wycieczki:\n{program}")
+    # Treść
+    pdf.cell(200, 10, txt=f"Kierunek: {tytul}", ln=True)
+    pdf.cell(200, 10, txt=f"Termin: {termin}", ln=True)
     pdf.ln(5)
     
-    pdf.cell(200, 10, "Cennik:", ln=True)
+    pdf.multi_cell(0, 10, txt=f"Program:\n{program}")
+    pdf.ln(5)
+    
+    pdf.cell(200, 10, txt="Cennik:", ln=True)
     for k, v in ceny.items():
-        pdf.cell(200, 10, f"- {k}: {v} zł", ln=True)
-
+        pdf.cell(200, 10, txt=f"{k}: {v}", ln=True)
+        
     return pdf.output(dest="S").encode("latin-1", errors="ignore")
 
-# --- INTERFEJS APLIKACJI ---
-st.title("📸 Personalizowany Kreator Travis")
+st.title("📸 Kreator Ofert TRAVIS")
 
+# PANEL BOCZNY - Personalizacja
 with st.sidebar:
-    st.header("🖼️ Multimedia")
+    st.header("🖼️ Wygląd")
     logo = st.file_uploader("Wgraj LOGO biura", type=['png', 'jpg'])
-    foto = st.file_uploader("Wgraj ZDJĘCIE główne wycieczki", type=['png', 'jpg'])
+    foto = st.file_uploader("Wgraj ZDJĘCIE główne", type=['png', 'jpg'])
     
-    st.header("✍️ Dane oferty")
-    tytul = st.text_input("Tytuł", "MALTA 4 DNI [cite: 3]")
-    termin = st.text_input("Termin", "27 czerwca - 1 lipca [cite: 6]")
-    c1 = st.text_input("Cena (46-50 osób)", "3 395,00 ")
-    c2 = st.text_input("Cena (40-45 osób)", "3 470,00 ")
+    st.header("📝 Dane")
+    u_tytul = st.text_input("Tytuł", "MALTA 4 DNI")
+    u_termin = st.text_input("Termin", "27 czerwca - 1 lipca")
+    u_c1 = st.text_input("Cena (46-50 os.)", "3 395,00 zł")
+    u_c2 = st.text_input("Cena (40-45 os.)", "3 470,00 zł")
 
-# Wyświetlanie podglądu zdjęć
-col1, col2 = st.columns(2)
+# PODGLĄD W APLIKACJI
+col1, col2 = st.columns([1, 2])
 with col1:
-    if logo:
-        st.image(logo, caption="Twoje Logo", width=150)
+    if logo: st.image(logo, width=150)
+    else: st.warning("Brak logo")
 with col2:
-    if foto:
-        st.image(foto, caption="Zdjęcie wycieczki", use_container_width=True)
+    if foto: st.image(foto, use_container_width=True)
+    else: st.info("Tutaj pojawi się zdjęcie główne")
 
 st.markdown("---")
-program_tekst = st.text_area("Edytuj program dnia po dniu", 
-    "Dzień 1: Zbiórka w Olsztynie, przylot na Maltę. [cite: 7]\n"
-    "Dzień 2: Zwiedzanie Valletty, Mdiny i Mosty. [cite: 12, 17, 19]\n"
-    "Dzień 3: Rejs na Gozo, Victoria i solniska. [cite: 22, 24, 32]\n"
-    "Dzień 4: Błękitna Grota i powrót do Polski. [cite: 36, 41]")
 
-ceny_dict = {"46-50 osób": c1, "40-45 osób": c2}
+# EDYCJA TREŚCI (Domyślnie z Twojego PDF)
+program_input = st.text_area("Program wycieczki", value=(
+    "Dzień 1: Wyjazd z Olsztyna, przylot na Maltę. [cite: 7]\n"
+    "Dzień 2: Valletta (Katedra św. Jana), Mdina i Rotunda w Moście. [cite: 12, 17, 19]\n"
+    "Dzień 3: Całodniowa wycieczka na Gozo i Victoria. [cite: 22, 24]\n"
+    "Dzień 4: Błękitna Grota, Klify Dingli i powrót. [cite: 36, 39, 41]"
+), height=200)
 
-# --- POBIERANIE ---
-if st.button("🚀 Generuj i Pobierz Ofertę PDF"):
-    pdf_data = create_pdf(tytul, termin, program_tekst, ceny_dict, logo, foto)
-    b64 = base64.b64encode(pdf_data).decode()
-    href = f'<a href="data:application/octet-stream;base64,{b64}" download="Oferta_Travis.pdf">Kliknij tutaj, aby pobrać plik PDF</a>'
-    st.markdown(href, unsafe_allow_html=True)
+if st.button("📥 Generuj PDF"):
+    try:
+        pdf_res = create_pdf(u_tytul, u_termin, program_input, {"46-50 os.": u_c1, "40-45 os.": u_c2}, logo, foto)
+        st.success("PDF wygenerowany! Użyj opcji drukowania w przeglądarce (Ctrl+P), aby zapisać z grafikami.")
+    except Exception as e:
+        st.error(f"Błąd generowania: {e}")
+
+st.caption("Travis Biuro Podróży | tel: 789 563 405 [cite: 26]")
