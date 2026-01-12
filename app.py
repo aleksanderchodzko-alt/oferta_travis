@@ -10,23 +10,24 @@ from reportlab.lib.utils import ImageReader
 from io import BytesIO
 import requests
 
-# --- 1. CZCIONKA I ZASOBY ---
+# --- 1. POBIERANIE ZASOBÓW (Logo i Czcionka) ---
 @st.cache_data
-def get_external_resource(url):
+def get_resource(url):
     try:
-        res = requests.get(url, timeout=10)
+        res = requests.get(url, timeout=15)
         return res.content
     except:
         return None
 
-FONT_DATA = get_external_resource("https://github.com/google/fonts/raw/main/ofl/opensans/OpenSans%5Bwdth%2Cwght%5D.ttf")
-if FONT_DATA:
-    pdfmetrics.registerFont(TTFont('Standard', BytesIO(FONT_DATA)))
+# Pobieramy logo i czcionkę na starcie aplikacji
+LOGO_BYTES = get_resource("https://travis.pl/wp-content/uploads/2025/07/logo_travis500.png")
+FONT_BYTES = get_resource("https://github.com/google/fonts/raw/main/ofl/opensans/OpenSans%5Bwdth%2Cwght%5D.ttf")
+
+if FONT_BYTES:
+    pdfmetrics.registerFont(TTFont('Standard', BytesIO(FONT_BYTES)))
     FONT_NAME = 'Standard'
 else:
     FONT_NAME = 'Helvetica'
-
-LOGO_DATA = get_external_resource("https://travis.pl/wp-content/uploads/2025/07/logo_travis500.png")
 
 # --- 2. KONFIGURACJA KOLORÓW ---
 NAVY = colors.HexColor("#002d5a")
@@ -49,11 +50,11 @@ def shadow_image(img_file, w, h):
     except:
         return Paragraph("[Błąd obrazu]", getSampleStyleSheet()['Normal'])
 
-# --- 4. KLASA NAGŁÓWKA I STOPKI (NA KAŻDĄ STRONĘ) ---
-def draw_page_template(canvas, doc):
+# --- 4. DEFINICJA SZABLONU STRONY (NAGŁÓWEK, STOPKA, TŁO) ---
+def my_layout(canvas, doc):
     canvas.saveState()
     
-    # Tło strony
+    # Rysowanie tła na całej stronie
     canvas.setFillColor(BG_LIGHT)
     canvas.rect(0, 0, A4[0], A4[1], fill=1, stroke=0)
     
@@ -68,10 +69,11 @@ def draw_page_template(canvas, doc):
     canvas.drawPath(p, fill=1, stroke=0)
 
     # LOGO (Gwarantowane na każdej stronie)
-    if LOGO_DATA:
+    if LOGO_BYTES:
         try:
-            logo_reader = ImageReader(BytesIO(LOGO_DATA))
-            canvas.drawImage(logo_reader, (A4[0]-7.5*cm)/2, A4[1]-3.2*cm, width=7.5*cm, preserveAspectRatio=True, mask='auto')
+            # Używamy ImageReader bezpośrednio na bajtach
+            logo = ImageReader(BytesIO(LOGO_BYTES))
+            canvas.drawImage(logo, (A4[0]-7.5*cm)/2, A4[1]-3.5*cm, width=7.5*cm, preserveAspectRatio=True, mask='auto')
         except:
             pass
 
@@ -92,29 +94,32 @@ def draw_page_template(canvas, doc):
     
     canvas.restoreState()
 
-# --- 5. GENEROWANIE PDF ---
+# --- 5. GŁÓWNA FUNKCJA PDF ---
 def generate_pdf(tytul, termin, plan, koszt, zawiera, nie_zawiera, foto_main, galeria):
     buffer = BytesIO()
-    # Margines górny musi być duży (4.5cm), żeby tekst nie wszedł pod logo
+    # Frame definiuje gdzie tekst może być rysowany (zostawiamy miejsce na logo i stopkę)
     doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=4.5*cm, bottomMargin=3.5*cm, leftMargin=1.2*cm, rightMargin=1.2*cm)
     
+    # Rejestracja szablonu strony
+    frame = Frame(doc.leftMargin, doc.bottomMargin, doc.width, doc.height, id='normal')
+    template = PageTemplate(id='TravisLayout', frames=frame, onPage=my_layout)
+    doc.addPageTemplates([template])
+
     style_h = ParagraphStyle('H', fontName=FONT_NAME, fontSize=11, textColor=NAVY, spaceAfter=8, borderLeftWidth=3, borderLeftColor=NAVY, leftIndent=8)
     style_p = ParagraphStyle('P', fontName=FONT_NAME, fontSize=9, leading=12, textColor=TEXT_BLACK)
     
     story = []
     
-    # Tytuł i Termin
+    # Treść
     story.append(Paragraph(tytul.upper(), ParagraphStyle('T', fontName=FONT_NAME, fontSize=22, alignment=1, textColor=NAVY)))
     story.append(Spacer(1, 10))
     story.append(Paragraph(f"📅 TERMIN: {termin}", ParagraphStyle('S', fontName=FONT_NAME, fontSize=12, alignment=1)))
     story.append(Spacer(1, 20))
 
-    # Zdjęcie główne
     if foto_main:
         story.append(shadow_image(foto_main, 17.5*cm, 8*cm))
         story.append(Spacer(1, 25))
 
-    # Karta
     def card(content, w):
         t = Table([[content]], colWidths=[w])
         t.setStyle(TableStyle([
@@ -127,12 +132,10 @@ def generate_pdf(tytul, termin, plan, koszt, zawiera, nie_zawiera, foto_main, ga
         ]))
         return t
 
-    # Program
     story.append(Paragraph("✈️ PROGRAM WYCIECZKI", style_h))
     story.append(card(Paragraph(plan.replace('\n','<br/>'), style_p), 18*cm))
     story.append(Spacer(1, 20))
 
-    # Finanse
     story.append(Paragraph("💰 SZCZEGÓŁY FINANSOWE", style_h))
     col_w = 5.7*cm
     f_table = Table([
@@ -144,7 +147,6 @@ def generate_pdf(tytul, termin, plan, koszt, zawiera, nie_zawiera, foto_main, ga
     f_table.setStyle(TableStyle([('VALIGN',(0,0),(-1,-1),'TOP')]))
     story.append(f_table)
 
-    # Galeria
     if galeria:
         story.append(Spacer(1, 25))
         story.append(Paragraph("📸 GALERIA", style_h))
@@ -155,26 +157,22 @@ def generate_pdf(tytul, termin, plan, koszt, zawiera, nie_zawiera, foto_main, ga
         if row: g_rows.append(row)
         story.append(Table(g_rows, colWidths=[6*cm]*3))
 
-    # PRZYPISANIE SZABLONU DO WSZYSTKICH STRON
-    template = PageTemplate(id='Travis', frames=Frame(doc.leftMargin, doc.bottomMargin, doc.width, doc.height), onPage=draw_page_template)
-    doc.addPageTemplates([template])
-    
     doc.build(story)
     return buffer.getvalue()
 
-# --- 6. UI STREAMLIT ---
+# --- 6. INTERFEJS STREAMLIT ---
 st.title("🏝️ Travis Designer Premium")
 
 with st.sidebar:
-    st.header("Kontakt w stopce")
-    st.session_state['tel'] = st.text_input("Numer telefonu", "789 563 405")
-    st.session_state['mail'] = st.text_input("Adres e-mail", "biuro@travis.pl")
+    st.header("Kontakt")
+    st.session_state['tel'] = st.text_input("Telefon", "789 563 405")
+    st.session_state['mail'] = st.text_input("E-mail", "biuro@travis.pl")
     f_main = st.file_uploader("Zdjęcie główne", type=['jpg','png'])
     f_gal = st.file_uploader("Galeria", type=['jpg','png'], accept_multiple_files=True)
 
-u_t = st.text_input("Tytuł")
+u_t = st.text_input("Tytuł wycieczki")
 u_d = st.text_input("Termin")
-u_p = st.text_area("Program (Dzień po dniu)", height=200)
+u_p = st.text_area("Program wycieczki", height=200)
 
 c1, c2, c3 = st.columns(3)
 with c1: u_k = st.text_area("Koszt")
