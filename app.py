@@ -6,19 +6,20 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, Tabl
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
-from reportlab.lib.utils import ImageReader
 from io import BytesIO
 import requests
 
-# --- 1. POBIERANIE LOGO DO PAMIĘCI (STABILNA METODA) ---
+# --- 1. FUNKCJA POBIERANIA LOGO (WYMUSZONE BYTES) ---
 @st.cache_data
-def get_logo_data():
+def get_logo_bytes():
     url = "https://travis.pl/wp-content/uploads/2025/07/logo_travis500.png"
     try:
-        resp = requests.get(url, timeout=10)
-        return BytesIO(resp.content)
-    except:
-        return None
+        response = requests.get(url, timeout=10)
+        if response.status_code == 200:
+            return response.content
+    except Exception as e:
+        st.error(f"Błąd pobierania logo: {e}")
+    return None
 
 # --- 2. KONFIGURACJA CZCIONKI ---
 @st.cache_data
@@ -52,7 +53,7 @@ def shadow_image(img_file, w, h):
     except:
         return Paragraph("[Błąd obrazu]", getSampleStyleSheet()['Normal'])
 
-# --- SZABLON STRONY (NAGŁÓWEK I STOPKA) ---
+# --- SZABLON STRONY ---
 def my_page_layout(canvas, doc):
     canvas.saveState()
     canvas.setFillColor(BG_LIGHT)
@@ -61,21 +62,23 @@ def my_page_layout(canvas, doc):
     # Góra (Falka)
     canvas.setFillColor(NAVY)
     p = canvas.beginPath()
-    p.moveTo(0, A4[1])
-    p.lineTo(A4[0], A4[1])
-    p.lineTo(A4[0], A4[1]-1*cm)
+    p.moveTo(0, A4[1]); p.lineTo(A4[0], A4[1]); p.lineTo(A4[0], A4[1]-1*cm)
     p.curveTo(A4[0]*0.6, A4[1]-1.8*cm, A4[0]*0.4, A4[1]-0.4*cm, 0, A4[1]-1.2*cm)
     p.close()
     canvas.drawPath(p, fill=1, stroke=0)
 
-    # LOGO (Metoda z użyciem ImageReader z pamięci)
-    logo_data = get_logo_data()
-    if logo_data:
+    # LOGO (Metoda BytesIO - najpewniejsza)
+    logo_bytes = get_logo_bytes()
+    if logo_bytes:
         try:
-            logo_data.seek(0) # Reset pozycji w buforze
-            img_reader = ImageReader(logo_data)
-            canvas.drawImage(img_reader, (A4[0]-7.5*cm)/2, A4[1]-3.2*cm, width=7.5*cm, preserveAspectRatio=True, mask='auto')
+            img_for_canvas = Image(BytesIO(logo_bytes))
+            img_for_canvas.drawHeight = 1.5*cm # wymuszamy wysokość
+            img_for_canvas.drawWidth = 7.5*cm  # wymuszamy szerokość
+            
+            # Rysujemy logo na środku
+            canvas.drawImage(ImageReader(BytesIO(logo_bytes)), (A4[0]-7.5*cm)/2, A4[1]-3.2*cm, width=7.5*cm, preserveAspectRatio=True, mask='auto')
         except:
+            # Rezerwowa metoda rysowania jeśli ImageReader zawiedzie
             pass
 
     # Dół (Falka)
@@ -85,7 +88,7 @@ def my_page_layout(canvas, doc):
     p_bot.curveTo(A4[0]*0.7, 1.2*cm, A4[0]*0.3, 3.2*cm, 0, 1.7*cm); p_bot.close()
     canvas.drawPath(p_bot, fill=1, stroke=0)
     
-    # STOPKA
+    # STOPKA (Z numerem telefonu)
     canvas.setFillColor(colors.white)
     canvas.setFont(FONT_NAME, 7)
     tel = st.session_state.get('tel', '789 563 405')
@@ -93,6 +96,9 @@ def my_page_layout(canvas, doc):
     canvas.drawCentredString(A4[0]/2, 1.2*cm, f"Biuro Podróży TRAVIS | tel: {tel} | e-mail: {mail}")
     canvas.drawCentredString(A4[0]/2, 0.8*cm, "Wpis do Rejestru Organizatorów i Pośredników Turystycznych nr 41059")
     canvas.restoreState()
+
+# Pomocnicza klasa dla ImageReader
+from reportlab.lib.utils import ImageReader
 
 def generate_pdf(tytul, termin, plan, koszt, zawiera, nie_zawiera, foto_main, galeria):
     buffer = BytesIO()
