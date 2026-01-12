@@ -140,7 +140,7 @@ def generate_pdf(tytul, termin, plan, koszt, zawiera, nie_zawiera, foto_main, ga
 
 # --- 4. UI ---
 st.set_page_config(page_title="Travis Offer Designer", layout="centered")
-st.title("🏝️ Travis Designer Crystal & Wave")
+st.title("🏝️ Tworzenie ofert - Travis")
 
 with st.sidebar:
     st.header("Dane kontaktowe")
